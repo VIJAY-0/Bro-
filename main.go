@@ -31,29 +31,55 @@ func main() {
 		log.Fatal(err)
 	}
 
-	BasePrompt := `You will be given some task to generate shell e
-	you will be given user input and you need to generate a plan and create actions accordingly to complete the task, you can ask question in following format. you need to give response in josn format, no extra text needed.
-	ask 1 question per prompt.
-	return plain json string nothing else.
-	after asking question you wiil be primpted with whatever user input was given.
-	after completeion return type exit
-			
-	The format wiil be of following type.
-					{'type':'typeofresponse', .... }
+	BasePrompt := `You are an assistant designed to convert user tasks into a series of executable steps and shell commands.
+Your responsibilities:
+1. Understand the user's input task.
+2. Generate a step-by-step plan.
+3. Ask concise questions if more information is needed — only one question per response.
+4. Convert steps into executable shell commands.
+5. Indicate task completion.
 
-					type can be of following 0->plan,
-											 1->action, 
-											 2->question,
-											 3->command,
-											 4->exit.
+Each response must be in following structure:
 
-					{'type':0,'plan': ['do this and this and this' , 'fllowing with this'] , 'req':[req1 , req2 , req3]} }}
-					{'type':1,'action': " "}
-					{'type':2,'question': "question statement here"}
-					{'type':3,'command':"<give a shell executteable command in string here>"}
-					example {'type':3,'command':"ls -d /directory_xyz" }
-					{'type':4 } 
-					`
+------------------------------------------------------------
+RESPONSE FORMAT (as string):
+
+{ "type": 0, "plan": ["step1", "step2", ...], "req": ["requirement1", "requirement2", ...] }
+  -> Type 0: Planning response
+
+{ "type": 1, "action": "Describe a non-command action" }
+  -> Type 1: Action step
+
+{ "type": 2, "question": "Ask a follow-up question" }
+  -> Type 2: Clarification question
+
+{ "type": 3, "command": "Shell command to execute" }
+  -> Type 3: Executable shell command
+
+{ "type": 4 }
+  -> Type 4: Task completion
+
+------------------------------------------------------------
+RULES:
+- Only ask one question at a time using type 2.
+- Wait for user input before continuing.
+- Respond with type 4 to end the task.
+
+------------------------------------------------------------
+EXAMPLE:
+
+User: list all directories here
+
+Response 1:
+{ "type": 0, "plan": ["List all directories using the ls command"], "req": ["Access to the ls command", "Permission to execute shell commands"] }
+
+Response 2:
+{ "type": 3, "command": "ls -d */" }
+
+------------------------------------------------------------
+
+Respond strictly in a plain string that follows this format(not a json object). Always use double quotes for keys and values.
+`
 
 	history := []*genai.Content{
 		genai.NewContentFromText(BasePrompt, genai.RoleUser),
@@ -76,18 +102,18 @@ func main() {
 
 		if len(res.Candidates) > 0 {
 			text := res.Candidates[0].Content.Parts[0].Text
-			if strings.HasPrefix(text, "```json") {
-				text = strings.TrimPrefix(text, "```json")
-				text = strings.TrimSuffix(text, "```")
-				text = strings.TrimSpace(text)
-			}
+			text = strings.TrimPrefix(text, "```json")
+			text = strings.TrimPrefix(text, "```")
+			text = strings.TrimSuffix(text, "```")
+			text = strings.TrimSpace(text)
 
 			fmt.Println(text)
 
 			var result map[string]interface{}
+
 			err = json.Unmarshal([]byte(text), &result)
 			if err != nil {
-				fmt.Printf("errorr in unmarshaling ,%v\ns", err)
+				fmt.Printf("errorr in unmarshaling ,%v \n", err)
 			}
 
 			//question
@@ -111,14 +137,15 @@ func main() {
 
 				}
 				resp, err := shell.Run_command(string(command))
-
 				// print(resp)
 
 				if err != nil {
 					fmt.Println("error executing command")
 				}
 
-				fmt.Printf("command line response ::  %s \n", resp)
+				fmt.Println("command line response  ----|")
+				fmt.Println("command line response      V")
+				fmt.Printf("%s", resp)
 				if resp == "" {
 					fmt.Println("resp ==  '' ")
 					prompt = "done"
