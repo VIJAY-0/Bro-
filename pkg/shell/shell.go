@@ -7,10 +7,9 @@ import (
 
 func Run_command(command string) (string, error) {
 
-	fmt.Printf("executing comamand on shell < %s >\n", command)
+	fmt.Printf("executing comamand on shell <%s>", command)
 	cmd := exec.Command("bash", "-c", command)
 	response, err := cmd.CombinedOutput()
-
 	if err != nil {
 		return "", err
 	}

@@ -1,10 +1,8 @@
 package agent
 
 import (
-	"GoodBash/pkg/shell"
 	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -14,11 +12,14 @@ import (
 )
 
 type Agent struct {
-	ctx     context.Context
-	client  *genai.Client
-	history []*genai.Content
-	chat    *genai.Chat
-	reader  *bufio.Reader
+	ctx       context.Context
+	client    *genai.Client
+	history   []*genai.Content
+	chat      *genai.Chat
+	reader    *bufio.Reader
+	memory    Memory
+	dbs       DBs
+	registers Registers
 }
 
 func (ag *Agent) Activate() {
@@ -36,7 +37,14 @@ func (ag *Agent) Activate() {
 	ag.createChat()
 
 	err = ag.startTask()
+	if err != nil {
+		panic(err)
+	}
 
+}
+
+func (ag *Agent) InitDBs(DBroot string) {
+	ag.dbs = NewDBset(DBroot)
 }
 
 func (ag *Agent) addHistory(strs []string) {
@@ -53,7 +61,6 @@ func (ag *Agent) init(APIkeys string) {
 		APIKey:  APIkeys,
 		Backend: genai.BackendGeminiAPI,
 	})
-
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -72,7 +79,6 @@ func (ag *Agent) createChat() error {
 func (ag *Agent) prompt(prompt string) (string, error) {
 	resp, err := ag.chat.SendMessage(ag.ctx, genai.Part{Text: prompt})
 	if err != nil {
-		// log.Fatalf("error during prompting \n %v",err)
 		return "", err
 	}
 	response, err := ag.getText(resp)
@@ -97,99 +103,6 @@ func (ag *Agent) unmarshable(jsonString string) string {
 	text = strings.TrimSpace(text)
 
 	return text
-}
-
-func (ag *Agent) processState(state string) (string, error) {
-
-	// fmt.Println("PROCESSIGN STATE")
-	// fmt.Println(state)
-	var result map[string]interface{}
-
-	err := json.Unmarshal([]byte(state), &result)
-
-	if err != nil {
-		fmt.Printf("errorr in unmarshaling ,%v \n", err)
-	}
-
-	stateVal, ok := result["type"].(float64)
-	if !ok {
-		fmt.Println(state)
-		fmt.Println(result)
-		return "", fmt.Errorf("invalid response generated\n")
-	}
-
-	switch stateVal {
-	case 0:
-		{
-			fmt.Printf("here is the plan :")
-			plan, ok := result["plan"].([]interface{})
-			if !ok {
-				return "", fmt.Errorf("no plan provided")
-			}
-
-			fmt.Println(plan)
-			return "okk", nil
-		}
-	case 1:
-		{
-			fmt.Printf("gonna take the following action :")
-			action, ok := result["action"].(string)
-			if !ok {
-				return "", fmt.Errorf("no action provided")
-			}
-			fmt.Println(action)
-			return "okk", nil
-		}
-	case 2:
-		{
-			query, ok := result["question"].(string)
-			if !ok {
-				return "", fmt.Errorf("no question asked")
-			}
-			fmt.Println(query)
-			fmt.Print("Enter response: ")
-			input, _ := ag.reader.ReadString('\n')
-			// fmt.Printf("You entered: %s\n", input)
-			return input, nil
-		}
-	case 3:
-		{
-			command, ok := result["command"].(string)
-			if !ok {
-				return "invalid response", fmt.Errorf("no command provided")
-			}
-			resp, err := shell.Run_command(string(command))
-			if err != nil {
-				fmt.Println("error executing command")
-			}
-
-			// fmt.Println("command line response  ----|")
-			// fmt.Printf("%s", resp)
-			if resp == "" {
-				fmt.Println("resp ==  '' ")
-				return "shell returned empty string", nil
-			}
-			return resp, nil
-		}
-	case 4:
-		{
-			response, ok := result["finalResponse"].(string)
-			if !ok {
-				return "invalid response", fmt.Errorf("envalid response")
-			}
-			fmt.Println("------------")
-			fmt.Println(response)
-			fmt.Println("------------")
-			fmt.Println("safe exiting")
-
-		}
-	default:
-		{
-			return "invalid state", nil
-		}
-	}
-
-	return "exit", nil
 }
 
 func (ag *Agent) startTask() error {

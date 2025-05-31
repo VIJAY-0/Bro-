@@ -1,6 +1,6 @@
 package main
 
-import "GoodBash/pkg/agent"
+import agent "GoodBash/pkg/Agent"
 
 // type Response struct {
 // 	respType  int `type`
@@ -10,6 +10,8 @@ import "GoodBash/pkg/agent"
 func main() {
 
 	Agent := agent.Agent{}
+	Agent.InitDBs("DatabaseROOT")
+
 	Agent.Activate()
 
 }
